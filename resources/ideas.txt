@@ -1,0 +1,34 @@
+Ideas and instructions
+
+
+Run through all possible files, images, whatever
+Create a “SharedAssets” folder of them, all unique images. Store as dictionary with key: hash, value: filepath
+THEN scroll through all JSON and replace all references to files with reference to shared assets (edited)
+
+# REGEX for finding relPaths in JSON
+map\\/.+\\/(images|audio).+(png|wav)
+
+the next big step would be you experimenting with  cordova projects.
+You could start by making your own basic boilerplate cordova project, just an index file with an animation or whatever on it.
+run it over to an android as an apk.
+Then, theoretically, if you put the entire slimmed down offline export, with the json and the everything, into the cordova www folder, and export that, it should work just fine on the tablet.
+theoretically
+There's a lot of design related questions we may want to ask, like what kind of a standardized "cover" image we want for the app, or waht sorts of splash screens we want to just load by default
+But yeah
+
+Get a basic cordova project running (on a tablet)
+Then attempt to offline export a map, stick it into the cordova project, and run that on a tablet
+then we look into the exact linux server side commands you'll shell execute to automate the process
+We also need to come up with some failsafes.
+For instance, we're going to use a boilerplate cordova project scruture on the server, but only one. No need to duplicate the whole thing for every map
+So we need to make sure we only export one APK at a time
+some sort of hold/release, and a timeout to make sure it doesn't get stuck
+We may also want to run
+> cordova clean
+before
+> cordova build
+
+since it's going to be different maps every time it builds
+But for now
+just the starter project
+Make sense?
