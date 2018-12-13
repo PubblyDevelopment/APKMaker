@@ -19,10 +19,15 @@ class APKMaker:
 
         self.mapName = mn
 
+        self.resourcePath = str(Path(self.root + '/resources'))
         self.engineNo = open(Path(self.root + '/resources/latest.txt'), 'r').read()
+        self.enginePath = str(Path(self.root + '/resources/engine'))
         self.initMap = str(Path(self.root + '/map/' + self.mapName))
         self.stagePath = str(Path(self.root + '/staging/' + self.mapName))
         self.units = next(os.walk(self.initMap))[1]
+
+        self.extToCheck = ['.ogg','.mp3','.wav']
+        self.regExp = r'(relPath.*)": "(map\\/(.+\\/(.*)(png|wav|mp4|jpg|jpeg)?))'
 
     '''def getFiles(self, folderName, filetype):
         for subdir, dirs, files in os.walk(self.cwd):
@@ -52,6 +57,7 @@ class APKMaker:
     def checkIfEntryPointExists(self):
         try:
             self.entryPoint = open(self.initMap + "/entryPoint.txt", "r").read()
+            print ("Entry point at " + self.entryPoint)
         except:
             print("Fatal: No entry point specified.")
 
@@ -65,7 +71,7 @@ class APKMaker:
         except OSError:
             print("sharedAssets already exists, overwriting contents...")'''
 
-        print (self.initMap)
+        os.mkdir(self.stagePath + "/sharedAssets")
 
     def checkJSONExistsNewerEngine(self):
         #TODO Dec 12/10/18
@@ -73,44 +79,58 @@ class APKMaker:
             filesToCheck = os.listdir(self.stagePath + "/" + u)
 
             unitJSON = None
+            unitXML = None
             for f in filesToCheck:
                 if ".json" in f and "modified" not in f:
                     unitJSON = f
+                if ".xml" in f:
+                    unitXML = f
 
 
             if (unitJSON):
                 if self.engineNo in unitJSON:
                     self.jsonFiles[u] = self.stagePath + "/" + u + "/" + unitJSON
                 else:
-                    print ("Outdated JSON (" + captureRegEx("1\.1\.\d", 0, unitJSON) + ") at " + u + ". Current: " + self.engineNo)
+                    print ("Fatal: Outdated JSON (" + captureRegEx("1\.1\.\d", 0, unitJSON) + ") at " + u + ". Current: " + self.engineNo)
+            else:
+                print ("Fatal: JSON missing.")
 
-        print(self.jsonFiles)
+            if (unitXML):
+                if (unitJSON):
+                    if not isNewer(self.jsonFiles[u], self.stagePath + "/" + u + "/" + unitXML):
+                        print ("Fatal: XML not parsed at " + u)
+            else:
+                print ("Fatal: XML missing.")
+
                 #try:
                     # Save JSON so we can use it later, important!
                 #    self.jsonFiles[u] = unitJSON
 
     def goThruFiles(self):
-        # Walk through all files ending in png, wav, or JSON
+        # Walk through all files ending in png or wav
         # If png or wav, calls another function that determines whether or not to add to assets
-        for root, dirs, files in os.walk(self.cwd):
+        shared = (self.stagePath)
+        for root, dirs, files in os.walk(shared):
             for f in files:
-                if f.endswith("png") or f.endswith("wav"):
+                if f.endswith("png") or f.endswith("wav") or f.endswith("mp4") or f.endswith("jpg") or f.endswith("jpg"):
                     self.checkFileExistsInShared(f,os.path.join(root, f))
-                if f.endswith("json"):
-                    self.jsonFiles.append(os.path.join(root, f))
 
     def checkFileExistsInShared(self, filename, filepath):
+        sharedFolder = self.stagePath + "/sharedAssets/"
         h = self.getHash(filepath)
         if not h in self.checked.keys():
             self.checked[h] = filename
-            shutil.copyfile(filepath, "sharedAssets/" + filename)
+            shutil.copyfile(filepath, sharedFolder + filename)
 
-    def replaceFile(self, jsonLine):
-        for j in self.jsonFiles:
-            with fileinput.FileInput(j, inplace=True) as file:
+    def replaceFile(self):
+        for k,v in self.jsonFiles.items():
+            print (v)
+            with fileinput.FileInput(v, inplace=True) as file:
                 for line in file:
                     try:
-                        whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio).+(png|wav))",0,line))
+                        whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))",
+                                                      0,
+                                                      line))
                         #whatToReplace = "EQ_WORLD_Tanzania"
                         replaceWith = self.determineReplaceWith(line)
                         #print (line, end='')
@@ -118,10 +138,21 @@ class APKMaker:
                     except:
                         print(line, end='')
 
+        '''whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))",
+                                      0,
+                                      r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_right_arrow_button_stroke2.png"))
+
+        print (whatToReplace)
+
+        print (self.determineReplaceWith(r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_right_arrow_button_stroke2.png"))'''
+
+        #whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4))",
+        #                              0,r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_Petros_01_cover.jpeg"))
+
 
         # Regex grab group 1 so we don't get map/etcetc
         # Might need to rewrite later but FOR NOW...........
-        origFilepath = captureRegEx(r"map\\/(.+\\/(images|audio).+(png|wav))",1,jsonLine).split(r"\/")
+        #origFilepath = captureRegEx(r"map\\/(.+\\/(images|audio).+(png|wav))",1,jsonLine).split(r"\/")
 
 
         # What if it can't find it in SharedAssets for some ungodly reason?
@@ -131,17 +162,53 @@ class APKMaker:
         #return self.jsonFiles
 
     def determineReplaceWith(self, jsonLine):
-        lookupFile = (captureRegEx(r"map\\/(.+\\/(images|audio).+(png|wav))", 1, jsonLine)).split(r"\/")
-        rebuiltFilepath = ""
+        lookupFile = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))", 1, jsonLine)).split(r"\/")
+
+        rebuiltFilepath = self.stagePath + "/"
 
         # Remove Windows forward slashes. Unix FTW
-        for i in range(0, len(lookupFile)):
+        for i in range(1, len(lookupFile)):
             rebuiltFilepath += lookupFile[i]
             if i < len(lookupFile) - 1:
                 rebuiltFilepath += "/"
 
+
         ## Lookup the file in checked, attach to sharedAssets
+        #return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
+
         return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
+
+    def runBuildHTML(self):
+        for u in self.units:
+            # Copy run file from correct location
+            shutil.copy(self.stagePath + "/pubbly_engine/" + self.engineNo + "/app.html", self.stagePath)
+
+            #print(self.stagePath + "/run.html")
+
+            with open(self.jsonFiles[u], 'r') as jsonFile:
+                jsonData = jsonFile.read()
+
+            with fileinput.FileInput(self.stagePath + "/app.html", inplace="True") as file:
+                for line in file:
+                    print(replaceAll(
+                        line, [
+                            ["{REL_ROOT}", self.root + '/staging/'],
+                            ["{ENGINE}", self.engineNo],
+                            ["{PUBBLY_JSON}", jsonData],
+                            ["{START_PAGE}", self.stagePath + "/" + self.entryPoint + ".html"],
+                        ]), end='')
+
+            os.rename(self.stagePath + "/app.html",
+                      self.stagePath + "/" + u + ".html")
+
+
+    def copyEngine(self):
+        shutil.copytree(self.enginePath, self.stagePath + "/pubbly_engine")
+
+    def makeIndex(self):
+        print(self.stagePath + "/" + self.entryPoint + ".html")
+
+        shutil.copyfile(self.stagePath + "/" + self.entryPoint + ".html", self.stagePath + "/index.html")
 
 
     def compareHashes(self,file1,file2):
@@ -157,10 +224,17 @@ class APKMaker:
         return os.path.getsize(file1) , os.path.getsize(file2)
 
     def doTheThing(self):
-        #self.copyToStagingArea()
         self.checkIfEntryPointExists()
+        self.copyToStagingArea()
         self.checkJSONExistsNewerEngine()
+        #self.makeSharedAssetsFolder()
         #self.goThruFiles()
+        #self.replaceFile()
+        #self.copyEngine()
+        #self.runBuildHTML()
+        #self.makeIndex()
+
+
         #print ("done!")
         #jsonFile = r"someshitsomeshitmap\/EpicQuest\/variable-EQ_WORLD_Tanzania-EQ_WORLD_Tanzania\/images\/TEST.pngmoreshit"
         #print(self.replaceFile(jsonFile))

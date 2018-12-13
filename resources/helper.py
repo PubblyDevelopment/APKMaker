@@ -32,13 +32,12 @@ def hash_file(filename):
 
     return h.hexdigest()
 
-def isNewer(self, new, old):
-
+def isNewer(new, old):
     result = os.path.getmtime(new) - os.path.getmtime(old)
     if (result is 0):
        self.warnings.append("Warning: The files were created at the same exact time. Weird.")
     else:
-        return (result < 0)
+        return (result > 0)
 
 '''print(replaceRegEx(r"\\/.+\\/(images|audio).+(png|wav)",
                    "FARTS",
