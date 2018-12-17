@@ -19,7 +19,9 @@ def replaceRegEx(regex, orig, repl):
 
 def captureRegEx(regex, group, string):
     m = re.search(regex, string)
-    return m.group(group)
+
+    if (m):
+        return m.group(group)
 
 def hash_file(filename):
     h = hashlib.md5()

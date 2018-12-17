@@ -27,13 +27,14 @@ class APKMaker:
         self.units = next(os.walk(self.initMap))[1]
 
         self.extToCheck = ['.ogg','.mp3','.wav']
-        self.regExp = r'(relPath.*)": "(map\\/(.+\\/(.*)(png|wav|mp4|jpg|jpeg)?))'
+        self.regExp = r'((relPath.*)": "(map\\/(.+\\/(.*)(png|wav|ogg|mp3|mp4|jpg|jpeg)?)))"'
+
 
     '''def getFiles(self, folderName, filetype):
         for subdir, dirs, files in os.walk(self.cwd):
             for file in files:
                 if file.endswith((folderName, filetype)):
-                    filepath = os.path.join(subdir, file)
+                    filepath = os.path.join(subdir, file0)
                     self.unchecked[filepath] = [self.getSize(filepath),self.getHash(filepath),file]
 
         for k, v in self.unchecked.items():
@@ -112,7 +113,7 @@ class APKMaker:
         shared = (self.stagePath)
         for root, dirs, files in os.walk(shared):
             for f in files:
-                if f.endswith("png") or f.endswith("wav") or f.endswith("mp4") or f.endswith("jpg") or f.endswith("jpg"):
+                if f.endswith("png") or f.endswith("wav") or f.endswith("ogg") or f.endswith("mp4") or f.endswith("jpg") or f.endswith("jpeg") or f.endswith("mp3"):
                     self.checkFileExistsInShared(f,os.path.join(root, f))
 
     def checkFileExistsInShared(self, filename, filepath):
@@ -127,42 +128,32 @@ class APKMaker:
             print (v)
             with fileinput.FileInput(v, inplace=True) as file:
                 for line in file:
-                    try:
-                        whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))",
-                                                      0,
-                                                      line))
-                        #whatToReplace = "EQ_WORLD_Tanzania"
+                    #try:
+                    whatToReplace = (captureRegEx(self.regExp,
+                                                  3,
+                                                  line))
+
+
+                    if (whatToReplace != None):
+
                         replaceWith = self.determineReplaceWith(line)
-                        #print (line, end='')
+
                         print (line.replace(whatToReplace,replaceWith), end='')
-                    except:
+                #except:
+                    else:
                         print(line, end='')
 
-        '''whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))",
-                                      0,
-                                      r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_right_arrow_button_stroke2.png"))
 
-        print (whatToReplace)
-
-        print (self.determineReplaceWith(r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_right_arrow_button_stroke2.png"))'''
-
-        #whatToReplace = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4))",
-        #                              0,r"map\/EpicQuest\/unit-EpicQuest-Books-Books-EQ_B1_Petros\/images\/P_Petros_01_cover.jpeg"))
-
-
-        # Regex grab group 1 so we don't get map/etcetc
-        # Might need to rewrite later but FOR NOW...........
-        #origFilepath = captureRegEx(r"map\\/(.+\\/(images|audio).+(png|wav))",1,jsonLine).split(r"\/")
-
-
-        # What if it can't find it in SharedAssets for some ungodly reason?
-        #print (rebuiltFilepath)
-        #return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
-        #return self.getHash()
-        #return self.jsonFiles
 
     def determineReplaceWith(self, jsonLine):
-        lookupFile = (captureRegEx(r"map\\/(.+\\/(images|audio|videos).+(png|wav|mp4|jpg|jpeg))", 1, jsonLine)).split(r"\/")
+        lookupFile = (captureRegEx(self.regExp,
+                                   4,
+                                   jsonLine)).split(r"\/")
+
+        hasFileExt = "NoExt" not in captureRegEx(self.regExp,
+                                                 2,
+                                                 jsonLine)
+
 
         rebuiltFilepath = self.stagePath + "/"
 
@@ -172,11 +163,12 @@ class APKMaker:
             if i < len(lookupFile) - 1:
                 rebuiltFilepath += "/"
 
-
-        ## Lookup the file in checked, attach to sharedAssets
-        #return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
-
-        return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
+        if (hasFileExt):
+            return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath)]
+        else:
+            for ext in self.extToCheck:
+                if os.path.isfile(rebuiltFilepath + ext):
+                    return "sharedAssets/" + self.checked[self.getHash(rebuiltFilepath + ext)]
 
     def runBuildHTML(self):
         for u in self.units:
@@ -192,7 +184,7 @@ class APKMaker:
                 for line in file:
                     print(replaceAll(
                         line, [
-                            ["{REL_ROOT}", self.root + '/staging/'],
+                            ["{REL_ROOT}", '.'],
                             ["{ENGINE}", self.engineNo],
                             ["{PUBBLY_JSON}", jsonData],
                             ["{START_PAGE}", self.stagePath + "/" + self.entryPoint + ".html"],
@@ -201,7 +193,6 @@ class APKMaker:
             os.rename(self.stagePath + "/app.html",
                       self.stagePath + "/" + u + ".html")
 
-
     def copyEngine(self):
         shutil.copytree(self.enginePath, self.stagePath + "/pubbly_engine")
 
@@ -209,7 +200,6 @@ class APKMaker:
         print(self.stagePath + "/" + self.entryPoint + ".html")
 
         shutil.copyfile(self.stagePath + "/" + self.entryPoint + ".html", self.stagePath + "/index.html")
-
 
     def compareHashes(self,file1,file2):
         return hash_file(file1) == hash_file(file2)
@@ -227,12 +217,15 @@ class APKMaker:
         self.checkIfEntryPointExists()
         self.copyToStagingArea()
         self.checkJSONExistsNewerEngine()
-        #self.makeSharedAssetsFolder()
-        #self.goThruFiles()
-        #self.replaceFile()
-        #self.copyEngine()
-        #self.runBuildHTML()
-        #self.makeIndex()
+        self.makeSharedAssetsFolder()
+        self.goThruFiles()
+        self.replaceFile()
+        self.copyEngine()
+        self.runBuildHTML()
+        self.makeIndex()
+
+        for k, v in self.checked.items():
+            print (k, v)
 
 
         #print ("done!")
